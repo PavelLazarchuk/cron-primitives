@@ -1,0 +1,39 @@
+[
+    {
+        "name": "index (parse + search + catch-up)",
+        "path": "dist/index.js",
+        "limit": "5.5 kB",
+        "gzip": true
+    },
+    {
+        "name": "next only",
+        "path": "dist/index.js",
+        "import": "{ next }",
+        "limit": "2.8 kB",
+        "gzip": true
+    },
+    {
+        "name": "cron (parser only)",
+        "path": "dist/cron/index.js",
+        "limit": "2 kB",
+        "gzip": true
+    },
+    {
+        "name": "tz",
+        "path": "dist/tz/index.js",
+        "limit": "1.2 kB",
+        "gzip": true
+    },
+    {
+        "name": "describe",
+        "path": "dist/describe/index.js",
+        "limit": "1.5 kB",
+        "gzip": true
+    },
+    {
+        "name": "schedule",
+        "path": "dist/schedule/index.js",
+        "limit": "3.6 kB",
+        "gzip": true
+    }
+]

@@ -1,0 +1,163 @@
+{
+    "name": "cron-primitives",
+    "version": "1.0.0",
+    "description": "Cron schedule math as pure functions — next run, previous run, missed runs, DST policies. JSON-serializable schedules, no clock reads, no timers, no I/O, no dependencies. Time zones via Intl. Runs in Cloudflare Workers, Durable Objects, Deno, browsers and Node.",
+    "license": "MIT",
+    "sideEffects": false,
+    "type": "module",
+    "engines": {
+        "node": ">=18"
+    },
+    "files": [
+        "dist"
+    ],
+    "publishConfig": {
+        "access": "public",
+        "provenance": true
+    },
+    "exports": {
+        ".": {
+            "import": {
+                "types": "./dist/index.d.ts",
+                "default": "./dist/index.js"
+            },
+            "require": {
+                "types": "./dist/index.d.cts",
+                "default": "./dist/index.cjs"
+            }
+        },
+        "./cron": {
+            "import": {
+                "types": "./dist/cron/index.d.ts",
+                "default": "./dist/cron/index.js"
+            },
+            "require": {
+                "types": "./dist/cron/index.d.cts",
+                "default": "./dist/cron/index.cjs"
+            }
+        },
+        "./tz": {
+            "import": {
+                "types": "./dist/tz/index.d.ts",
+                "default": "./dist/tz/index.js"
+            },
+            "require": {
+                "types": "./dist/tz/index.d.cts",
+                "default": "./dist/tz/index.cjs"
+            }
+        },
+        "./describe": {
+            "import": {
+                "types": "./dist/describe/index.d.ts",
+                "default": "./dist/describe/index.js"
+            },
+            "require": {
+                "types": "./dist/describe/index.d.cts",
+                "default": "./dist/describe/index.cjs"
+            }
+        },
+        "./schedule": {
+            "import": {
+                "types": "./dist/schedule/index.d.ts",
+                "default": "./dist/schedule/index.js"
+            },
+            "require": {
+                "types": "./dist/schedule/index.d.cts",
+                "default": "./dist/schedule/index.cjs"
+            }
+        },
+        "./package.json": "./package.json"
+    },
+    "typesVersions": {
+        "*": {
+            "cron": [
+                "./dist/cron/index.d.ts"
+            ],
+            "tz": [
+                "./dist/tz/index.d.ts"
+            ],
+            "describe": [
+                "./dist/describe/index.d.ts"
+            ],
+            "schedule": [
+                "./dist/schedule/index.d.ts"
+            ]
+        }
+    },
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch",
+        "typecheck": "tsc --noEmit",
+        "lint": "eslint .",
+        "lint:pkg": "publint && attw --pack .",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "smoke": "node scripts/smoke.mjs",
+        "fixtures": "node scripts/gen-fixtures.mjs",
+        "size": "size-limit",
+        "bench": "node scripts/bench.mjs",
+        "pack:verify": "npm pack --dry-run",
+        "changeset": "changeset",
+        "release": "npm run build && node scripts/publish-if-new.mjs",
+        "prepare": "husky"
+    },
+    "keywords": [
+        "cron",
+        "crontab",
+        "cron-parser",
+        "cron-expression",
+        "cron-schedule",
+        "next-run",
+        "scheduler",
+        "schedule",
+        "recurrence",
+        "timezone",
+        "dst",
+        "iana",
+        "intl",
+        "quartz",
+        "catch-up",
+        "pure-functions",
+        "serializable",
+        "stateless",
+        "edge",
+        "cloudflare-workers",
+        "durable-objects",
+        "deno",
+        "typescript",
+        "zero-dependencies"
+    ],
+    "author": "Pavel Lazarchuk",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/PavelLazarchuk/cron-primitives.git"
+    },
+    "bugs": {
+        "url": "https://github.com/PavelLazarchuk/cron-primitives/issues"
+    },
+    "homepage": "https://github.com/PavelLazarchuk/cron-primitives#readme",
+    "devDependencies": {
+        "@arethetypeswrong/cli": "^0.18.5",
+        "@changesets/cli": "^2.31.1",
+        "@eslint/js": "^10.0.1",
+        "@size-limit/preset-small-lib": "^13.0.3",
+        "@types/node": "^24.13.3",
+        "cron-parser": "^5.4.0",
+        "eslint": "^10.7.0",
+        "eslint-config-prettier": "^10.1.8",
+        "husky": "^9.1.7",
+        "lint-staged": "^17.0.8",
+        "prettier": "^3.9.5",
+        "publint": "^0.3.21",
+        "size-limit": "^13.0.3",
+        "tsup": "^8.5.1",
+        "typescript": "^6.0.3",
+        "typescript-eslint": "^8.64.0",
+        "vitest": "^4.1.10"
+    }
+}
