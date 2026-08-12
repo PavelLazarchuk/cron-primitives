@@ -2,7 +2,7 @@
     {
         "name": "index (parse + search + catch-up)",
         "path": "dist/index.js",
-        "limit": "5.5 kB",
+        "limit": "5.7 kB",
         "gzip": true
     },
     {
@@ -15,7 +15,7 @@
     {
         "name": "cron (parser only)",
         "path": "dist/cron/index.js",
-        "limit": "2 kB",
+        "limit": "2.4 kB",
         "gzip": true
     },
     {
@@ -27,13 +27,13 @@
     {
         "name": "describe",
         "path": "dist/describe/index.js",
-        "limit": "1.5 kB",
+        "limit": "1.9 kB",
         "gzip": true
     },
     {
         "name": "schedule",
         "path": "dist/schedule/index.js",
-        "limit": "3.6 kB",
+        "limit": "3.7 kB",
         "gzip": true
     }
 ]

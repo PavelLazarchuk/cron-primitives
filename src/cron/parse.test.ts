@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CronSyntaxError } from '../core/errors';
+import { isInterval } from '../core/search';
 import { parseCron, safeParseCron } from './parse';
 
 describe('field expansion', () => {
@@ -62,6 +63,51 @@ describe('field expansion', () => {
         expect(parseCron('@daily')).toEqual(parseCron('0 0 * * *'));
         expect(parseCron('@WEEKLY')).toEqual(parseCron('0 0 * * 0'));
         expect(parseCron('@yearly')).toEqual(parseCron('0 0 1 1 *'));
+    });
+
+    it('expands @every into the step it means', () => {
+        expect(parseCron('@every 30s')).toEqual(parseCron('*/30 * * * * *'));
+        expect(parseCron('@every 5m')).toEqual(parseCron('*/5 * * * *'));
+        expect(parseCron('@every 2h')).toEqual(parseCron('0 */2 * * *'));
+        expect(parseCron('@every 1d')).toEqual(parseCron('@daily'));
+        expect(parseCron('@every 1s').hasSeconds).toBe(true);
+        expect(parseCron('@every 1m').hasSeconds).toBe(false);
+    });
+
+    it('reads the @every unit long or short, in any case', () => {
+        for (const expression of [
+            '@every 5m',
+            '@every 5 m',
+            '@every 5min',
+            '@every 5 mins',
+            '@every 5 minute',
+            '@EVERY 5 Minutes',
+        ]) {
+            expect(parseCron(expression)).toEqual(parseCron('*/5 * * * *'));
+        }
+    });
+
+    it('leaves an @every interval reading as one', () => {
+        expect(isInterval(parseCron('@every 5m'))).toBe(true);
+        expect(isInterval(parseCron('@every 30s'))).toBe(true);
+        expect(isInterval(parseCron('@every 2h'))).toBe(false);
+    });
+
+    it.each([
+        ['@every 7m', /does not divide the hour evenly/],
+        ['@every 90s', /does not divide the minute evenly/],
+        ['@every 5h', /does not divide the day evenly/],
+        ['@every 3d', /the day-of-month field restarts every month/],
+        ['@every 0m', /count of at least 1/],
+        ['@every', /@every takes a count and a unit/],
+        ['@every 5', /@every takes a count and a unit/],
+        ['@every 5 weeks', /@every takes a count and a unit/],
+        ['@everything', /unknown macro/],
+    ])('refuses the @every periods cron cannot hold: %s', (expression, message) => {
+        expect(() => parseCron(expression)).toThrow(message);
+        const result = safeParseCron(expression);
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.index).toBe(0);
     });
 
     it('normalizes surrounding and repeated whitespace', () => {

@@ -11,7 +11,9 @@ export interface ScheduleOptions extends Options {
     lastRunAt?: number;
     catchUp?: boolean;
     maxCatchUp?: number;
+    preventOverlap?: boolean;
     onError?: (error: unknown, firedAt: number) => void;
+    onSkip?: (firedAt: number) => void;
 }
 
 export interface CronRunner {
@@ -35,6 +37,7 @@ export function scheduleCron(
     let target: number | null = null;
     let lastRunAt = options.lastRunAt ?? now();
     let stopped = false;
+    let running = 0;
 
     const report = (error: unknown, firedAt: number): void => {
         if (options.onError !== undefined) options.onError(error, firedAt);
@@ -44,10 +47,25 @@ export function scheduleCron(
             }, 0);
     };
 
+    const settle = (): void => {
+        running -= 1;
+    };
+
     const invoke = (firedAt: number): void => {
+        if (options.preventOverlap === true && running > 0) {
+            if (options.onSkip !== undefined) options.onSkip(firedAt);
+            return;
+        }
+
         try {
             const result = handler(firedAt);
-            if (result instanceof Promise) result.catch(error => report(error, firedAt));
+            if (result instanceof Promise) {
+                running += 1;
+                result.then(settle, error => {
+                    settle();
+                    report(error, firedAt);
+                });
+            }
         } catch (error) {
             report(error, firedAt);
         }
@@ -71,7 +89,10 @@ export function scheduleCron(
 
         if (options.catchUp === true) {
             const result = dueSince(schedule, { lastRunAt }, current, options);
-            for (const firedAt of result.due) invoke(firedAt);
+            for (const firedAt of result.due) {
+                if (stopped) break;
+                invoke(firedAt);
+            }
             lastRunAt = result.state.lastRunAt;
         } else if (target !== null) {
             invoke(target);

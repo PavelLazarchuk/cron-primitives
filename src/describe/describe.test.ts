@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseCron } from '../cron/parse';
-import { describeCron } from './index';
+import { describeCron, englishStrings, type DescribeStrings } from './index';
 
 describe('describeCron', () => {
     it.each([
@@ -56,5 +56,92 @@ describe('describeCron', () => {
 
     it('says "and" when only one day field is restricted, as the search does', () => {
         expect(describeCron(parseCron('0 0 */2 * 1'))).toBe('at 00:00, every 2 days and on Monday');
+    });
+});
+
+describe('describeCron strings', () => {
+    it('takes a single word without the rest of the language', () => {
+        expect(describeCron(parseCron('0 9 * * *'), { strings: { everyDay: 'daily' } })).toBe(
+            'at 09:00, daily'
+        );
+    });
+
+    it('reaches every sentence that renders through an overridden piece', () => {
+        const strings = { ordinal: (value: number) => `${value}.` };
+        expect(describeCron(parseCron('0 0 1,15 * *'), { strings })).toBe(
+            'at 00:00, on the 1. and 15.'
+        );
+        expect(describeCron(parseCron('0 0 15W * *'), { strings })).toBe(
+            'at 00:00, on the weekday nearest the 15.'
+        );
+        expect(
+            describeCron(parseCron('30 2 * * 1#3'), {
+                strings: { nthWord: value => `#${value}` },
+            })
+        ).toBe('at 02:30, on the #3 Monday of the month');
+    });
+
+    it('lets a language reorder the sentence, not just translate it', () => {
+        const strings: Partial<DescribeStrings> = {
+            sentence: parts =>
+                [parts.months, parts.days, parts.time].filter(part => part !== '').join('; '),
+        };
+        expect(describeCron(parseCron('0 12 1 1,7 *'), { strings })).toBe(
+            'in January and July; on the 1st; at 12:00'
+        );
+    });
+
+    it('describes a schedule in another language entirely', () => {
+        const russian: Partial<DescribeStrings> = {
+            dayNames: [
+                'воскресенье',
+                'понедельник',
+                'вторник',
+                'среду',
+                'четверг',
+                'пятницу',
+                'субботу',
+            ],
+            monthNames: [
+                'январе',
+                'феврале',
+                'марте',
+                'апреле',
+                'мае',
+                'июне',
+                'июле',
+                'августе',
+                'сентябре',
+                'октябре',
+                'ноябре',
+                'декабре',
+            ],
+            list: (items, conjunction) =>
+                items.length < 2
+                    ? (items[0] ?? '')
+                    : `${items.slice(0, -1).join(', ')} ${conjunction === 'and' ? 'и' : 'или'} ${items[items.length - 1] as string}`,
+            atTimes: times => `в ${times}`,
+            onDayNames: days => `по ${days}`,
+            everyNMinutes: step => `каждые ${step} минут`,
+            everyDay: 'каждый день',
+            inMonths: months => `в ${months}`,
+            inZone: (sentence, tz) => `${sentence} (${tz})`,
+        };
+
+        expect(describeCron(parseCron('0 9 * * *'), { strings: russian })).toBe(
+            'в 09:00, каждый день'
+        );
+        expect(describeCron(parseCron('0 9 * * 1,3'), { strings: russian })).toBe(
+            'в 09:00, по понедельник и среду'
+        );
+        expect(
+            describeCron(parseCron('*/15 * * 1,7 *'), { strings: russian, tz: 'Europe/Warsaw' })
+        ).toBe('каждые 15 минут, в январе и июле (Europe/Warsaw)');
+    });
+
+    it('leaves the shipped dictionary alone', () => {
+        describeCron(parseCron('0 9 * * *'), { strings: { everyDay: 'daily' } });
+        expect(englishStrings.everyDay).toBe('every day');
+        expect(describeCron(parseCron('0 9 * * *'))).toBe('at 09:00, every day');
     });
 });

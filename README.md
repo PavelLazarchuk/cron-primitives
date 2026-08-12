@@ -13,7 +13,7 @@ This package ships the arithmetic and hands the answer back:
 
 - **Zero dependencies.** No polyfills, no `node:` imports in the core.
 - **Edge-native.** Runs unchanged in Workers, Deno, Bun, browsers and Node >= 18.
-- **5.1 kB gzipped** for everything; 2.7 kB if you only import `next`.
+- **5.5 kB gzipped** for everything; 2.7 kB if you only import `next`.
 - **Serializable schedules.** Parse once, store the object, restore it after a restart.
 
 ```ts
@@ -32,11 +32,11 @@ npm install cron-primitives
 
 | Import                     | What you get                                                                        | Size (gzip) |
 | -------------------------- | ----------------------------------------------------------------------------------- | ----------- |
-| `cron-primitives`          | `parseCron`, `next`, `prev`, `nextN`, `occurrences`, `matches`, `dueSince`, `isDue` | 5.1 kB      |
-| `cron-primitives/cron`     | the parser alone, for validating input                                              | 1.9 kB      |
+| `cron-primitives`          | `parseCron`, `next`, `prev`, `nextN`, `occurrences`, `matches`, `dueSince`, `isDue` | 5.5 kB      |
+| `cron-primitives/cron`     | the parser alone, for validating input                                              | 2.3 kB      |
 | `cron-primitives/tz`       | `offsetAt`, `wallFromEpoch`, `epochFromWall`                                        | 1.1 kB      |
-| `cron-primitives/describe` | a schedule in English                                                               | 1.3 kB      |
-| `cron-primitives/schedule` | the only module that touches a timer                                                | 3.5 kB      |
+| `cron-primitives/describe` | a schedule in any language                                                          | 1.8 kB      |
+| `cron-primitives/schedule` | the only module that touches a timer                                                | 3.6 kB      |
 
 ## The two things this is actually for
 
@@ -190,7 +190,7 @@ epochFromWall('America/New_York', { year: 2026, month: 3, day: 8, hour: 2, minut
 
 `clearTimeZoneCache()` drops the memoized offsets and `Intl.DateTimeFormat` instances — useful in a benchmark, and in an isolate that outlives a tzdata update.
 
-### English — `cron-primitives/describe`
+### Words — `cron-primitives/describe`
 
 ```ts
 import { describeCron } from 'cron-primitives/describe';
@@ -200,6 +200,28 @@ describeCron(parseCron('30 2 * * 1#3'), { tz: 'Europe/Warsaw' });
 describeCron(parseCron('*/15 * * * *')); // → 'every 15 minutes'
 describeCron(parseCron('0 0 L * *')); // → 'at 00:00, on the last day of the month'
 ```
+
+English is the default, not the only option: every word the function can say lives in a `DescribeStrings` dictionary, and `strings` overrides as much of it as you like. `englishStrings` is exported to build on.
+
+```ts
+import { describeCron, englishStrings, type DescribeStrings } from 'cron-primitives/describe';
+
+describeCron(parseCron('0 9 * * *'), { strings: { everyDay: 'daily' } });
+// → 'at 09:00, daily'
+
+// A whole language: build on English and override what you have translated, so
+// an entry you have not reached yet stays a word rather than becoming undefined.
+const german: DescribeStrings = {
+    ...englishStrings,
+    dayNames: ['Sonntag', 'Montag' /* … */],
+    atTimes: times => `um ${times}`,
+    everyDay: 'täglich',
+    list: (items, conjunction) => items.join(conjunction === 'and' ? ' und ' : ' oder '),
+};
+describeCron(parseCron('0 9 * * *'), { strings: german }); // → 'um 09:00, täglich'
+```
+
+The pieces reach each entry already rendered by the same dictionary, so overriding `ordinal`, `list` or `dayNames` alone changes every sentence that uses one. Word order is a dictionary entry too: `sentence` receives the time, day and month phrases separately, and decides how they go together — as does `bothDayFields`, for the two-day-field case where the connector carries the `or`/`and` meaning.
 
 ### Timers — `cron-primitives/schedule`
 
@@ -219,6 +241,19 @@ runner.stop();
 
 The handler receives the instant it was **scheduled** for, not the instant it actually ran — timers are late, and the difference matters to anything that writes the time down. Waits longer than `setTimeout` can hold are re-armed in slices instead of firing immediately. `now`, `setTimer` and `clearTimer` are injectable, which is how this package's own tests run a year of schedule in a millisecond.
 
+A schedule does not wait for the job. If the handler returns a promise and the next occurrence arrives before it settles, the default is to call the handler again — two copies of the job, running at once. `preventOverlap` is the other choice, and it has a name for the same reason the DST policies do:
+
+```ts
+const runner = scheduleCron(parseCron('* * * * *'), () => syncEverything(), {
+    preventOverlap: true, // a fire that would overlap the last one is dropped
+    onSkip: firedAt => log.warn('skipped', firedAt),
+});
+```
+
+The occurrence is dropped, not queued: the handler is not called, `onSkip` says which instant went by, and `lastRunAt` still moves past it, so `catchUp` does not replay it later either. In a catch-up batch the same rule applies per occurrence, which is what keeps a five-hour backlog from becoming five concurrent jobs. A synchronous handler can never overlap itself, so the option costs it nothing.
+
+The runner keeps arming either way — it is the fire that is dropped, not the schedule. A promise that never settles therefore skips every occurrence after it, which is the honest reading of "do not overlap" and an argument for giving the handler its own timeout.
+
 ## Syntax
 
 | Form               | Example                  | Notes                                                                     |
@@ -230,10 +265,24 @@ The handler receives the instant it was **scheduled** for, not the instant it ac
 | Names              | `JAN`, `mon-FRI`         | case-insensitive, usable in ranges                                        |
 | Sunday             | `0` or `7`               | `FRI-MON` wraps; other fields refuse a backwards range                    |
 | Macros             | `@daily`                 | `@yearly` `@annually` `@monthly` `@weekly` `@daily` `@midnight` `@hourly` |
+| Periods            | `@every 5m`              | `s` `m` `h` `d`, long or short: `@every 30s`, `@every 15 minutes`         |
 | Last day           | `L`, `L-3`               | last day of the month, and three days before it                           |
 | Nearest weekday    | `15W`, `LW`              | never leaves the month                                                    |
 | Nth / last weekday | `5#3`, `5L`              | third Friday, last Friday                                                 |
 | Blank field        | `?`                      | accepted as a synonym for `*`                                             |
+
+`@every` expands to the step it means — `@every 5m` is `*/5 * * * *`, `@every 30s` is `*/30 * * * * *`, `@every 2h` is `0 */2 * * *`, `@every 1d` is `@daily` — which means it only accepts the periods a cron step can actually hold:
+
+```ts
+parseCron('@every 7m');
+// → CronSyntaxError: @every 7m does not divide the hour evenly — a cron step
+//   restarts at the start of every hour
+parseCron('@every 3d');
+// → CronSyntaxError: @every 3d is not a cron schedule — the day-of-month field
+//   restarts every month
+```
+
+A `*/7` minute field fires seven minutes apart until :56 and then four minutes later, so reading `@every 7m` as `*/7` would answer a question nobody asked. Refusing it is the only honest option a cron field leaves.
 
 Not supported, deliberately: `@reboot` (there is no process to boot) and Jenkins-style `H` hashing.
 

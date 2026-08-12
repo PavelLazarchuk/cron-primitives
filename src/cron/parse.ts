@@ -56,6 +56,57 @@ const MACROS: Record<string, string> = {
     '@hourly': '0 * * * *',
 };
 
+const EVERY = /^@every\s+(\d{1,5})\s*(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d)$/;
+
+const RESTARTS_AT: Record<'s' | 'm' | 'h', string> = { s: 'minute', m: 'hour', h: 'day' };
+
+function failMacro(source: string, message: string): never {
+    throw new CronSyntaxError(message, { source, index: 0 });
+}
+
+/**
+ * `@every 5m` names a period, and cron only has the periods that divide their
+ * field evenly: a step restarts at the top of every hour, so a 7-minute step
+ * fires seven minutes apart until :56 and then four. The periods that fit
+ * expand; the ones that do not say why rather than drift.
+ */
+function expandEvery(source: string): { expression: string; seconds: boolean } {
+    const match = EVERY.exec(source.toLowerCase());
+    if (match === null) {
+        failMacro(
+            source,
+            `@every takes a count and a unit, as in "@every 30s" or "@every 2h", received ${JSON.stringify(source)}`
+        );
+    }
+
+    const count = Number(match[1]);
+    const unit = (match[2] as string)[0] as 's' | 'm' | 'h' | 'd';
+    if (count < 1) failMacro(source, `@every needs a count of at least 1, received ${count}`);
+
+    if (unit === 'd') {
+        if (count > 1) {
+            failMacro(
+                source,
+                `@every ${count}d is not a cron schedule — the day-of-month field restarts every month`
+            );
+        }
+        return { expression: '0 0 * * *', seconds: false };
+    }
+
+    const span = unit === 'h' ? 24 : 60;
+    if (span % count !== 0) {
+        const restart = RESTARTS_AT[unit];
+        failMacro(
+            source,
+            `@every ${count}${unit} does not divide the ${restart} evenly — a cron step restarts at the start of every ${restart}`
+        );
+    }
+
+    if (unit === 's') return { expression: `*/${count} * * * * *`, seconds: true };
+    if (unit === 'm') return { expression: `*/${count} * * * *`, seconds: false };
+    return { expression: `0 */${count} * * *`, seconds: false };
+}
+
 interface Ctx {
     source: string;
     field: CronFieldName;
@@ -213,7 +264,8 @@ function parseDow(text: string, ctx: Ctx): DowField {
  * Compiles a cron expression into a plain, serializable schedule.
  *
  * Accepts the standard five fields, an optional leading seconds field, the
- * usual macros, and the Quartz modifiers `L`, `W`, `#` and `?`.
+ * usual macros, `@every <count><unit>`, and the Quartz modifiers `L`, `W`, `#`
+ * and `?`.
  *
  * @throws {CronSyntaxError} naming the field and the offset that failed.
  */
@@ -230,10 +282,15 @@ export function parseCron(expression: string, options: ParseOptions = {}): CronS
     }
 
     if (source.startsWith('@')) {
+        if (/^@every\b/i.test(source)) {
+            const every = expandEvery(source);
+            return parseCron(every.expression, { ...options, seconds: every.seconds });
+        }
+
         const macro = MACROS[source.toLowerCase()];
         if (macro === undefined) {
             throw new CronSyntaxError(
-                `unknown macro ${JSON.stringify(source)} — known macros are ${Object.keys(MACROS).join(', ')}`,
+                `unknown macro ${JSON.stringify(source)} — known macros are ${Object.keys(MACROS).join(', ')} and @every <count><unit>`,
                 { source, index: 0 }
             );
         }

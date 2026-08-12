@@ -54,7 +54,17 @@ assert.equal(
 assert.equal(isDue(parseCron('0 * * * *'), outage.state, at('2026-01-01T06:00:00Z')), true);
 
 assert.equal(describeCron(weekdayMornings), 'at 09:00, on weekdays');
+assert.equal(
+    describeCron(weekdayMornings, { strings: { atTimes: times => `um ${times}` } }),
+    'um 09:00, on weekdays',
+    'the strings dictionary was ignored'
+);
 assert.equal(safeParseCron('0 0 * * 9').ok, false, 'a bad expression parsed');
+
+assert.deepEqual(parseCron('@every 5m'), parseCron('*/5 * * * *'), '@every 5m is not a 5-step');
+assert.deepEqual(parseCron('@every 30s'), parseCron('*/30 * * * * *'));
+assert.deepEqual(parseCron('@every 1d'), parseCron('@daily'));
+assert.equal(safeParseCron('@every 7m').ok, false, 'a period cron cannot hold was accepted');
 
 const hasFullIcu = (() => {
     try {
@@ -125,6 +135,39 @@ armed.callback();
 assert.equal(iso(firedAt), '2026-01-01T01:00:00.000Z', 'the handler got the wrong instant');
 runner.stop();
 assert.equal(runner.nextAt(), null);
+
+const started = [];
+const skipped = [];
+let release = () => {};
+let busyClock = at('2026-01-01T00:00:00Z');
+const busyQueue = [];
+const busyRunner = scheduleCron(
+    parseCron('0 * * * *'),
+    instant => {
+        started.push(instant);
+        return new Promise(resolve => (release = resolve));
+    },
+    {
+        now: () => busyClock,
+        setTimer: (callback, delay) => busyQueue.push({ fireAt: busyClock + delay, callback }) - 1,
+        clearTimer: () => busyQueue.splice(0, busyQueue.length),
+        preventOverlap: true,
+        onSkip: instant => skipped.push(instant),
+    }
+);
+for (let fire = 0; fire < 2; fire += 1) {
+    const armedNext = busyQueue.shift();
+    busyClock = armedNext.fireAt;
+    armedNext.callback();
+}
+assert.deepEqual(started.map(iso), ['2026-01-01T01:00:00.000Z'], 'an overlapping fire ran anyway');
+assert.deepEqual(
+    skipped.map(iso),
+    ['2026-01-01T02:00:00.000Z'],
+    'the skipped fire went unreported'
+);
+release();
+busyRunner.stop();
 
 const cjs = require('../dist/index.cjs');
 assert.equal(typeof cjs.parseCron, 'function');
