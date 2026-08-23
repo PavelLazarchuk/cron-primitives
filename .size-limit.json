@@ -1,39 +1,45 @@
 [
     {
-        "name": "index (parse + search + catch-up)",
+        "name": "cron-primitives",
         "path": "dist/index.js",
-        "limit": "5.7 kB",
+        "limit": "5.9 kB",
         "gzip": true
     },
     {
-        "name": "next only",
-        "path": "dist/index.js",
-        "import": "{ next }",
-        "limit": "2.8 kB",
+        "name": "cron-primitives (cjs)",
+        "path": "dist/index.cjs",
+        "limit": "6.05 kB",
         "gzip": true
     },
     {
-        "name": "cron (parser only)",
+        "name": "cron-primitives/cron",
         "path": "dist/cron/index.js",
-        "limit": "2.4 kB",
+        "limit": "2.5 kB",
         "gzip": true
     },
     {
-        "name": "tz",
+        "name": "cron-primitives/describe",
+        "path": "dist/describe/index.js",
+        "limit": "1.95 kB",
+        "gzip": true
+    },
+    {
+        "name": "cron-primitives/schedule",
+        "path": "dist/schedule/index.js",
+        "limit": "3.9 kB",
+        "gzip": true
+    },
+    {
+        "name": "cron-primitives/tz",
         "path": "dist/tz/index.js",
         "limit": "1.2 kB",
         "gzip": true
     },
     {
-        "name": "describe",
-        "path": "dist/describe/index.js",
-        "limit": "1.9 kB",
-        "gzip": true
-    },
-    {
-        "name": "schedule",
-        "path": "dist/schedule/index.js",
-        "limit": "3.7 kB",
+        "name": "tree-shaking: { next } only",
+        "path": "dist/index.js",
+        "import": "{ next }",
+        "limit": "2.95 kB",
         "gzip": true
     }
 ]
