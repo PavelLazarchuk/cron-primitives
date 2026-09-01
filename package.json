@@ -1,6 +1,6 @@
 {
     "name": "cron-primitives",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "Cron schedule math as pure functions — next run, previous run, missed runs, DST policies. JSON-serializable schedules, no clock reads, no timers, no I/O, no dependencies. Time zones via Intl. Runs in Cloudflare Workers, Durable Objects, Deno, browsers and Node.",
     "license": "MIT",
     "sideEffects": false,
