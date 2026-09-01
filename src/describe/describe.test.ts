@@ -145,3 +145,23 @@ describe('describeCron strings', () => {
         expect(describeCron(parseCron('0 9 * * *'))).toBe('at 09:00, every day');
     });
 });
+
+describe('the year field and @reboot', () => {
+    it('names a single year and a contiguous run', () => {
+        expect(describeCron(parseCron('0 0 1 1 ? 2027', { seconds: false }))).toContain('in 2027');
+        expect(describeCron(parseCron('0 0 1 1 ? 2027-2029', { seconds: false }))).toContain(
+            'from 2027 through 2029'
+        );
+        expect(describeCron(parseCron('0 0 1 1 ? 2027,2031', { seconds: false }))).toContain(
+            'in 2027 and 2031'
+        );
+    });
+
+    it('says nothing about the year when every year matches', () => {
+        expect(describeCron(parseCron('0 0 1 1 *'))).not.toMatch(/\d{4}/);
+    });
+
+    it('describes a reboot as a startup, with no zone', () => {
+        expect(describeCron(parseCron('@reboot'), { tz: 'Europe/Warsaw' })).toBe('at startup');
+    });
+});

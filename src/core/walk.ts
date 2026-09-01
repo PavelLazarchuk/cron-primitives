@@ -84,11 +84,21 @@ function cursorFrom(wall: WallInput): Cursor {
 }
 
 export function nextWallMatch(c: Compiled, from: WallInput, maxYear: number): WallInput | null {
-    const { second, minute, hour, month } = c;
+    const { second, minute, hour, month, year, yearSet } = c;
     const cursor = cursorFrom(from);
 
     for (let guard = 0; guard < GUARD; guard += 1) {
         if (cursor.year > maxYear) return null;
+
+        if (year !== null && yearSet !== null && !yearSet.has(cursor.year)) {
+            const value = nextIn(year, cursor.year);
+            if (value === undefined) return null;
+            cursor.year = value;
+            cursor.month = 1;
+            cursor.day = 1;
+            startOf(cursor);
+            continue;
+        }
 
         if (!c.monthSet.has(cursor.month)) {
             const value = nextIn(month, cursor.month);
@@ -160,11 +170,21 @@ export function nextWallMatch(c: Compiled, from: WallInput, maxYear: number): Wa
 }
 
 export function prevWallMatch(c: Compiled, from: WallInput, minYear: number): WallInput | null {
-    const { second, minute, hour, month } = c;
+    const { second, minute, hour, month, year, yearSet } = c;
     const cursor = cursorFrom(from);
 
     for (let guard = 0; guard < GUARD; guard += 1) {
         if (cursor.year < minYear) return null;
+
+        if (year !== null && yearSet !== null && !yearSet.has(cursor.year)) {
+            const value = prevIn(year, cursor.year);
+            if (value === undefined) return null;
+            cursor.year = value;
+            cursor.month = 12;
+            cursor.day = 31;
+            endOf(cursor);
+            continue;
+        }
 
         if (!c.monthSet.has(cursor.month)) {
             const value = prevIn(month, cursor.month);

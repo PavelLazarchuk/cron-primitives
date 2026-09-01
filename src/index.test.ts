@@ -10,6 +10,7 @@ describe('public surface', () => {
             'dueSince',
             'isDue',
             'isInterval',
+            'isReboot',
             'matches',
             'next',
             'nextN',

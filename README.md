@@ -13,7 +13,7 @@ This package ships the arithmetic and hands the answer back:
 
 - **Zero dependencies.** No polyfills, no `node:` imports in the core.
 - **Edge-native.** Runs unchanged in Workers, Deno, Bun, browsers and Node >= 18.
-- **5.5 kB gzipped** for everything; 2.7 kB if you only import `next`.
+- **5.8 kB gzipped** for everything; 2.8 kB if you only import `next`.
 - **Serializable schedules.** Parse once, store the object, restore it after a restart.
 
 ```ts
@@ -32,11 +32,11 @@ npm install cron-primitives
 
 | Import                     | What you get                                                                        | Size (gzip) |
 | -------------------------- | ----------------------------------------------------------------------------------- | ----------- |
-| `cron-primitives`          | `parseCron`, `next`, `prev`, `nextN`, `occurrences`, `matches`, `dueSince`, `isDue` | 5.5 kB      |
-| `cron-primitives/cron`     | the parser alone, for validating input                                              | 2.3 kB      |
+| `cron-primitives`          | `parseCron`, `next`, `prev`, `nextN`, `occurrences`, `matches`, `dueSince`, `isDue` | 5.8 kB      |
+| `cron-primitives/cron`     | the parser alone, for validating input                                              | 2.5 kB      |
 | `cron-primitives/tz`       | `offsetAt`, `wallFromEpoch`, `epochFromWall`                                        | 1.1 kB      |
-| `cron-primitives/describe` | a schedule in any language                                                          | 1.8 kB      |
-| `cron-primitives/schedule` | the only module that touches a timer                                                | 3.6 kB      |
+| `cron-primitives/describe` | a schedule in any language                                                          | 1.9 kB      |
+| `cron-primitives/schedule` | the only module that touches a timer                                                | 3.7 kB      |
 
 ## The two things this is actually for
 
@@ -260,11 +260,13 @@ The runner keeps arming either way — it is the fire that is dropped, not the s
 | ------------------ | ------------------------ | ------------------------------------------------------------------------- |
 | Five fields        | `30 9 * * 1-5`           | minute hour day-of-month month day-of-week                                |
 | Six fields         | `0 30 9 * * *`           | leading seconds field                                                     |
+| Seven fields       | `0 30 9 1 1 ? 2027`      | Quartz's trailing year, `1970`-`2099`                                     |
 | Steps              | `*/15`, `0-30/5`, `5/15` | `5/15` is "from 5 to the end, every 15"                                   |
 | Lists and ranges   | `1,15`, `9-17`           |                                                                           |
 | Names              | `JAN`, `mon-FRI`         | case-insensitive, usable in ranges                                        |
 | Sunday             | `0` or `7`               | `FRI-MON` wraps; other fields refuse a backwards range                    |
 | Macros             | `@daily`                 | `@yearly` `@annually` `@monthly` `@weekly` `@daily` `@midnight` `@hourly` |
+| Startup            | `@reboot`                | parses, and never fires — see `isReboot`                                  |
 | Periods            | `@every 5m`              | `s` `m` `h` `d`, long or short: `@every 30s`, `@every 15 minutes`         |
 | Last day           | `L`, `L-3`               | last day of the month, and three days before it                           |
 | Nearest weekday    | `15W`, `LW`              | never leaves the month                                                    |
@@ -284,7 +286,42 @@ parseCron('@every 3d');
 
 A `*/7` minute field fires seven minutes apart until :56 and then four minutes later, so reading `@every 7m` as `*/7` would answer a question nobody asked. Refusing it is the only honest option a cron field leaves.
 
-Not supported, deliberately: `@reboot` (there is no process to boot) and Jenkins-style `H` hashing.
+Not supported, deliberately: Jenkins-style `H` hashing.
+
+### The year field
+
+Quartz's seventh field pins a schedule to particular years, and this package reads it wherever a year can be told apart from a seconds field:
+
+```ts
+parseCron('0 30 9 1 1 ? 2027'); // seven fields: seconds first, year last
+parseCron('30 9 1 1 ? 2027', { seconds: false }); // six fields, no seconds
+```
+
+Six bare fields still mean a leading seconds field, as they always have, so nothing stored before this existed reads differently. An unrestricted year (`*` or `?`) leaves the field off the schedule entirely rather than storing all hundred and thirty of them, which is also why a schedule written by an older version restores unchanged.
+
+A year is a range check like any other field, so a schedule can run out:
+
+```ts
+const schedule = parseCron('0 0 1 1 ? 2027,2030', { seconds: false });
+nextN(schedule, now, 3, { maxYears: 20 }); // → Jan 1 2027, Jan 1 2030
+next(schedule, at('2031-01-01'), { maxYears: 20 }); // → null, and it says so at once
+```
+
+Note the `maxYears`: the default horizon is five years, and a schedule that names 2035 will answer `null` under it. That is the horizon working, not the year field failing — raise it when you pin a distant year.
+
+### `@reboot`
+
+`@reboot` fires when your process starts, which is an event and not a time, so there is no arithmetic here to do. It parses — a crontab full of it should not fail to load — and then every query answers "never":
+
+```ts
+const schedule = parseCron('@reboot');
+isReboot(schedule); // → true
+next(schedule, Date.now()); // → null
+matches(schedule, Date.now()); // → false
+describeCron(schedule); // → 'at startup'
+```
+
+Branch on `isReboot` and run the handler yourself at startup. `scheduleCron` treats one the same way: it arms no timer, and `nextAt()` is `null`.
 
 ### The day-of-month / day-of-week trap
 

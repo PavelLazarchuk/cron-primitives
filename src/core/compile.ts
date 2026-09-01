@@ -8,10 +8,12 @@ export interface Compiled {
     minute: number[];
     hour: number[];
     month: number[];
+    year: number[] | null;
     secondSet: ReadonlySet<number>;
     minuteSet: ReadonlySet<number>;
     hourSet: ReadonlySet<number>;
     monthSet: ReadonlySet<number>;
+    yearSet: ReadonlySet<number> | null;
     dom: DomField;
     dow: DowField;
     domSet: ReadonlySet<number>;
@@ -58,6 +60,10 @@ export function compile(schedule: CronSchedule): Compiled {
     const minute = values(schedule.minute, 'minute', 0, 59);
     const hour = values(schedule.hour, 'hour', 0, 23);
     const month = values(schedule.month, 'month', 1, 12);
+    const year =
+        schedule.year === undefined || schedule.year === null
+            ? null
+            : values(schedule.year, 'year', 1970, 2099);
     const dom = schedule.dom;
     const dow = schedule.dow;
 
@@ -67,10 +73,12 @@ export function compile(schedule: CronSchedule): Compiled {
         minute,
         hour,
         month,
+        year,
         secondSet: new Set(second),
         minuteSet: new Set(minute),
         hourSet: new Set(hour),
         monthSet: new Set(month),
+        yearSet: year === null ? null : new Set(year),
         dom,
         dow,
         domSet: new Set(values(dom?.days, 'dayOfMonth', 1, 31, true)),

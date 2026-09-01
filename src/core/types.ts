@@ -34,8 +34,10 @@ export interface CronSchedule {
     dom: DomField;
     month: number[];
     dow: DowField;
+    year?: number[];
     domDowMode: 'or' | 'and';
     hasSeconds: boolean;
+    reboot?: true;
 }
 
 export type NonexistentPolicy = 'skip' | 'shiftForward' | 'throw';

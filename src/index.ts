@@ -2,7 +2,7 @@ export { parseCron, safeParseCron } from './cron/parse';
 export type { ParseOptions, ParseResult } from './cron/parse';
 
 export { matches, next, nextN, occurrences, prev } from './core/api';
-export { isInterval } from './core/search';
+export { isInterval, isReboot } from './core/search';
 
 export { dueSince, isDue } from './catchup/dueSince';
 export type { DueSinceOptions, DueSinceResult } from './catchup/dueSince';

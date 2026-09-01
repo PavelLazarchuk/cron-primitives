@@ -25,6 +25,10 @@ interface ResolvedOptions {
     maxYears: number;
 }
 
+export function isReboot(schedule: CronSchedule): boolean {
+    return schedule.reboot === true;
+}
+
 /**
  * Vixie's rule, and the one users' intuitions already match: a schedule whose
  * minute or hour field covers its whole range is an interval, and intervals
@@ -33,6 +37,7 @@ interface ResolvedOptions {
  * DST takes away and gives back twice.
  */
 export function isInterval(schedule: CronSchedule): boolean {
+    if (schedule.reboot === true) return false;
     const c = compile(schedule);
     return (
         c.hour.length === 24 ||
@@ -83,6 +88,7 @@ export function nextInstant(
     options: Options = {}
 ): number | null {
     assertFinite(after, 'after');
+    if (schedule.reboot === true) return null;
     const c = compile(schedule);
     const opt = resolveOptions(schedule, options);
     const deadline = after + opt.maxYears * YEAR;
@@ -128,6 +134,7 @@ export function prevInstant(
     options: Options = {}
 ): number | null {
     assertFinite(before, 'before');
+    if (schedule.reboot === true) return null;
     const c = compile(schedule);
     const opt = resolveOptions(schedule, options);
     const floor = before - opt.maxYears * YEAR;
@@ -171,10 +178,12 @@ export function matchesInstant(
     options: Options = {}
 ): boolean {
     assertFinite(instant, 'instant');
+    if (schedule.reboot === true) return false;
     const c = compile(schedule);
     const opt = resolveOptions(schedule, options);
     const wall = wallFromOffset(instant, offsetMsAt(opt.tz, instant));
     return (
+        (c.yearSet === null || c.yearSet.has(wall.year)) &&
         c.secondSet.has(wall.second) &&
         c.minuteSet.has(wall.minute) &&
         c.hourSet.has(wall.hour) &&

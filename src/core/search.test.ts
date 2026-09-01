@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseCron } from '../cron/parse';
 import { at, iso, isoAll, oracleWall } from '../testUtils';
 import { matches, next, nextN, occurrences, prev } from './api';
+import { isReboot } from './search';
 
 const T0 = at('2026-01-01T00:00:00Z');
 
@@ -251,5 +252,49 @@ describe('walking backwards agrees with walking forwards', () => {
             cursor = instant;
         }
         expect(isoAll(backward.reverse())).toEqual(isoAll(forward));
+    });
+});
+
+describe('the year field', () => {
+    it('fires only in the years it names', () => {
+        const schedule = parseCron('0 0 1 1 ? 2028,2030', { seconds: false });
+        expect(nextN(schedule, at('2026-01-01T00:00:00Z'), 3, { maxYears: 20 })).toEqual([
+            at('2028-01-01T00:00:00Z'),
+            at('2030-01-01T00:00:00Z'),
+        ]);
+    });
+
+    it('runs out rather than spinning past the last year', () => {
+        const schedule = parseCron('0 0 1 1 ? 2027', { seconds: false });
+        expect(next(schedule, at('2028-01-01T00:00:00Z'), { maxYears: 50 })).toBeNull();
+        expect(prev(schedule, at('2026-01-01T00:00:00Z'), { maxYears: 50 })).toBeNull();
+    });
+
+    it('walks backwards into the newest year it names', () => {
+        const schedule = parseCron('0 0 31 12 ? 2027,2030', { seconds: false });
+        expect(prev(schedule, at('2033-06-01T00:00:00Z'), { maxYears: 20 })).toEqual(
+            at('2030-12-31T00:00:00Z')
+        );
+    });
+
+    it('is honoured by matches', () => {
+        const schedule = parseCron('0 0 1 1 ? 2028', { seconds: false });
+        expect(matches(schedule, at('2028-01-01T00:00:00Z'))).toBe(true);
+        expect(matches(schedule, at('2029-01-01T00:00:00Z'))).toBe(false);
+    });
+});
+
+describe('@reboot', () => {
+    const schedule = parseCron('@reboot');
+
+    it('has no next, no previous and no match', () => {
+        expect(isReboot(schedule)).toBe(true);
+        expect(next(schedule, 0)).toBeNull();
+        expect(prev(schedule, 0)).toBeNull();
+        expect(matches(schedule, 0)).toBe(false);
+    });
+
+    it('is not a reboot for every other schedule', () => {
+        expect(isReboot(parseCron('@daily'))).toBe(false);
     });
 });

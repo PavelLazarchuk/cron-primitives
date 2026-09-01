@@ -23,8 +23,9 @@ describe('field expansion', () => {
     });
 
     it('honours an explicit seconds flag', () => {
-        expect(() => parseCron('30 9 * * *', { seconds: true })).toThrow(/expected 6 fields/);
-        expect(() => parseCron('15 30 9 * * *', { seconds: false })).toThrow(/expected 5 fields/);
+        expect(() => parseCron('30 9 * * *', { seconds: true })).toThrow(/expected 6 or 7 fields/);
+        expect(parseCron('30 9 * * * 2027', { seconds: false }).year).toEqual([2027]);
+        expect(() => parseCron('15 30 9 * *', { seconds: true })).toThrow(/expected 6 or 7 fields/);
     });
 
     it('expands steps, ranges and lists', () => {
@@ -159,8 +160,10 @@ describe('errors', () => {
 
     it.each([
         ['', /expression is empty/],
-        ['0 0 * *', /expected 5 fields/],
-        ['0 0 * * * * *', /expected 5 fields/],
+        ['0 0 * *', /expected 5 or 6 fields/],
+        ['0 0 * * * * * *', /expected 6 or 7 fields/],
+        ['0 0 0 * * * 1969', /out of range 1970-2099/],
+        ['0 0 0 * * * 2100', /out of range 1970-2099/],
         ['0 6x * * *', /unexpected "6x"/],
         ['60 * * * *', /out of range 0-59/],
         ['0 0 0 * *', /out of range 1-31/],
@@ -187,5 +190,52 @@ describe('serialization', () => {
     it('survives a round trip through JSON', () => {
         const schedule = parseCron('0 30 2 L,15W 1,6 5#3', { domDowMode: 'and' });
         expect(JSON.parse(JSON.stringify(schedule))).toEqual(schedule);
+    });
+});
+
+describe('the Quartz year field', () => {
+    it('reads a seventh field alongside seconds', () => {
+        const schedule = parseCron('0 30 9 1 1 ? 2027');
+        expect(schedule.second).toEqual([0]);
+        expect(schedule.hasSeconds).toBe(true);
+        expect(schedule.year).toEqual([2027]);
+    });
+
+    it('reads a sixth field as the year when seconds are ruled out', () => {
+        const schedule = parseCron('30 9 1 1 ? 2027-2029', { seconds: false });
+        expect(schedule.hasSeconds).toBe(false);
+        expect(schedule.year).toEqual([2027, 2028, 2029]);
+    });
+
+    it('expands lists and steps like any other field', () => {
+        expect(parseCron('0 0 1 1 ? 2027,2031', { seconds: false }).year).toEqual([2027, 2031]);
+        expect(parseCron('0 0 1 1 ? 2026/25', { seconds: false }).year).toEqual([2026, 2051, 2076]);
+        expect(parseCron('0 0 1 1 ? 2026-2032/3', { seconds: false }).year).toEqual([
+            2026, 2029, 2032,
+        ]);
+    });
+
+    it('leaves an unrestricted year off the schedule entirely', () => {
+        expect(parseCron('0 0 1 1 ? *', { seconds: false }).year).toBeUndefined();
+        expect(parseCron('0 0 1 1 ? ?', { seconds: false }).year).toBeUndefined();
+        expect(parseCron('0 0 1 1 *').year).toBeUndefined();
+    });
+});
+
+describe('@reboot', () => {
+    it('parses, and says it is a reboot', () => {
+        const schedule = parseCron('@reboot');
+        expect(schedule.reboot).toBe(true);
+        expect(schedule.kind).toBe('cron');
+        expect(isInterval(schedule)).toBe(false);
+    });
+
+    it('is case-insensitive and survives a round trip through JSON', () => {
+        const schedule = JSON.parse(JSON.stringify(parseCron('@REBOOT')));
+        expect(schedule.reboot).toBe(true);
+    });
+
+    it('is named in the unknown-macro message', () => {
+        expect(() => parseCron('@nope')).toThrow(/@reboot/);
     });
 });

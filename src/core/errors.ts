@@ -1,6 +1,7 @@
 export const PREFIX = 'cron-primitives';
 
-export type CronFieldName = 'second' | 'minute' | 'hour' | 'dayOfMonth' | 'month' | 'dayOfWeek';
+export type CronFieldName =
+    'second' | 'minute' | 'hour' | 'dayOfMonth' | 'month' | 'dayOfWeek' | 'year';
 
 export class CronSyntaxError extends TypeError {
     readonly source: string;

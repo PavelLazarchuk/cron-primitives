@@ -44,9 +44,14 @@ export interface DescribeStrings {
     inMonths: (months: string) => string;
     inMonthsThrough: (first: string, last: string) => string;
 
+    inYears: (years: string) => string;
+    inYearsThrough: (first: number, last: number) => string;
+
+    atStartup: string;
+
     everyDay: string;
     bothDayFields: (dom: string, dow: string, mode: 'and' | 'or') => string;
-    sentence: (parts: { time: string; days: string; months: string }) => string;
+    sentence: (parts: { time: string; days: string; months: string; years: string }) => string;
     inZone: (sentence: string, tz: string) => string;
 }
 
@@ -141,10 +146,15 @@ export const englishStrings: DescribeStrings = {
     inMonths: months => `in ${months}`,
     inMonthsThrough: (first, last) => `in ${first} through ${last}`,
 
+    inYears: years => `in ${years}`,
+    inYearsThrough: (first, last) => `from ${first} through ${last}`,
+
+    atStartup: 'at startup',
+
     everyDay: 'every day',
     bothDayFields: (dom, dow, mode) => `${dom} ${mode} ${dow}`,
     sentence: parts =>
-        [parts.time, parts.days, parts.months].filter(part => part !== '').join(', '),
+        [parts.time, parts.days, parts.months, parts.years].filter(part => part !== '').join(', '),
     inZone: (sentence, tz) => `${sentence} (${tz})`,
 };
 
@@ -294,14 +304,25 @@ function monthPhrase(months: number[], s: DescribeStrings): string {
     return s.inMonths(s.list(names, 'and'));
 }
 
+function yearPhrase(years: number[] | undefined, s: DescribeStrings): string {
+    if (years === undefined || years.length === 0) return '';
+    if (years.length > 1 && isContiguous(years)) {
+        return s.inYearsThrough(years[0] as number, years[years.length - 1] as number);
+    }
+    return s.inYears(s.list(years.map(String), 'and'));
+}
+
 export function describeCron(schedule: CronSchedule, options: DescribeOptions = {}): string {
     const s =
         options.strings === undefined ? englishStrings : { ...englishStrings, ...options.strings };
+
+    if (schedule.reboot === true) return s.atStartup;
 
     const time = timePhrase(schedule, s);
     const dom = domPhrase(schedule.dom, s);
     const dow = dowPhrase(schedule.dow, s);
     const months = monthPhrase(schedule.month, s);
+    const years = yearPhrase(schedule.year, s);
 
     const bothRestricted = schedule.dom.restricted && schedule.dow.restricted;
     const mode = bothRestricted && schedule.domDowMode === 'or' ? 'or' : 'and';
@@ -309,6 +330,6 @@ export function describeCron(schedule: CronSchedule, options: DescribeOptions = 
     let days = dom !== '' && dow !== '' ? s.bothDayFields(dom, dow, mode) : dom !== '' ? dom : dow;
     if (days === '' && time.isClockTime) days = s.everyDay;
 
-    const sentence = s.sentence({ time: time.text, days, months });
+    const sentence = s.sentence({ time: time.text, days, months, years });
     return options.tz === undefined ? sentence : s.inZone(sentence, options.tz);
 }

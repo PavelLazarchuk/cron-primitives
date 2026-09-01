@@ -45,6 +45,7 @@ const HOUR: FieldDef = { name: 'hour', min: 0, max: 23 };
 const DOM: FieldDef = { name: 'dayOfMonth', min: 1, max: 31 };
 const MONTH: FieldDef = { name: 'month', min: 1, max: 12, names: MONTHS };
 const DOW: FieldDef = { name: 'dayOfWeek', min: 0, max: 7, names: WEEKDAYS, wraps: true };
+const YEAR: FieldDef = { name: 'year', min: 1970, max: 2099 };
 
 const MACROS: Record<string, string> = {
     '@yearly': '0 0 1 1 *',
@@ -55,6 +56,8 @@ const MACROS: Record<string, string> = {
     '@midnight': '0 0 * * *',
     '@hourly': '0 * * * *',
 };
+
+const REBOOT = '@reboot';
 
 const EVERY = /^@every\s+(\d{1,5})\s*(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d)$/;
 
@@ -125,7 +128,7 @@ function toValue(token: string, def: FieldDef, ctx: Ctx): number {
     const named = def.names?.[token.toLowerCase()];
     if (named !== undefined) return named;
 
-    if (!/^\d{1,2}$/.test(token)) fail(ctx, `unexpected ${JSON.stringify(token)}`);
+    if (!/^\d{1,4}$/.test(token)) fail(ctx, `unexpected ${JSON.stringify(token)}`);
     const value = Number(token);
     if (value < def.min || value > def.max) {
         fail(ctx, `${value} is out of range ${def.min}-${def.max}`);
@@ -193,6 +196,27 @@ function parseList(text: string, def: FieldDef, ctx: Ctx): number[] {
         for (const value of expand(term, def, ctx)) seen.add(value);
     }
     return [...seen].sort((a, b) => a - b);
+}
+
+function rebootSchedule(options: ParseOptions): CronSchedule {
+    return {
+        kind: 'cron',
+        second: [0],
+        minute: [0],
+        hour: [0],
+        dom: {
+            days: [1],
+            lastOffsets: [],
+            nearestWeekday: [],
+            lastWeekday: false,
+            restricted: true,
+        },
+        month: [1],
+        dow: { days: [], nth: [], last: [], restricted: false },
+        domDowMode: options.domDowMode ?? 'or',
+        hasSeconds: false,
+        reboot: true,
+    };
 }
 
 function isStar(text: string): boolean {
@@ -263,9 +287,9 @@ function parseDow(text: string, ctx: Ctx): DowField {
 /**
  * Compiles a cron expression into a plain, serializable schedule.
  *
- * Accepts the standard five fields, an optional leading seconds field, the
- * usual macros, `@every <count><unit>`, and the Quartz modifiers `L`, `W`, `#`
- * and `?`.
+ * Accepts the standard five fields, an optional leading seconds field, an
+ * optional trailing Quartz year field, the usual macros, `@reboot`,
+ * `@every <count><unit>`, and the Quartz modifiers `L`, `W`, `#` and `?`.
  *
  * @throws {CronSyntaxError} naming the field and the offset that failed.
  */
@@ -287,10 +311,13 @@ export function parseCron(expression: string, options: ParseOptions = {}): CronS
             return parseCron(every.expression, { ...options, seconds: every.seconds });
         }
 
-        const macro = MACROS[source.toLowerCase()];
+        const lower = source.toLowerCase();
+        if (lower === REBOOT) return rebootSchedule(options);
+
+        const macro = MACROS[lower];
         if (macro === undefined) {
             throw new CronSyntaxError(
-                `unknown macro ${JSON.stringify(source)} — known macros are ${Object.keys(MACROS).join(', ')} and @every <count><unit>`,
+                `unknown macro ${JSON.stringify(source)} — known macros are ${Object.keys(MACROS).join(', ')}, ${REBOOT} and @every <count><unit>`,
                 { source, index: 0 }
             );
         }
@@ -304,11 +331,12 @@ export function parseCron(expression: string, options: ParseOptions = {}): CronS
         tokens.push({ text: match[0], index: match.index });
     }
 
-    const wantsSeconds = options.seconds ?? tokens.length === 6;
+    const wantsSeconds = options.seconds ?? tokens.length >= 6;
     const expected = wantsSeconds ? 6 : 5;
-    if (tokens.length !== expected) {
+    const hasYear = tokens.length === expected + 1;
+    if (tokens.length !== expected && !hasYear) {
         throw new CronSyntaxError(
-            `expected ${expected} fields, received ${tokens.length} in ${JSON.stringify(source)}`,
+            `expected ${expected} or ${expected + 1} fields, received ${tokens.length} in ${JSON.stringify(source)}`,
             { source }
         );
     }
@@ -323,7 +351,7 @@ export function parseCron(expression: string, options: ParseOptions = {}): CronS
     const offset = wantsSeconds ? 1 : 0;
     const second = wantsSeconds ? parseList(text(0), SECOND, at(0, SECOND)) : [0];
 
-    return {
+    const schedule: CronSchedule = {
         kind: 'cron',
         second,
         minute: parseList(text(offset), MINUTE, at(offset, MINUTE)),
@@ -334,6 +362,16 @@ export function parseCron(expression: string, options: ParseOptions = {}): CronS
         domDowMode: options.domDowMode ?? 'or',
         hasSeconds: wantsSeconds,
     };
+
+    if (hasYear) {
+        const position = offset + 5;
+        const field = text(position);
+        if (field !== '*' && field !== '?') {
+            schedule.year = parseList(field, YEAR, at(position, YEAR));
+        }
+    }
+
+    return schedule;
 }
 
 export type ParseResult =
