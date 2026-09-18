@@ -8,6 +8,7 @@ describe('public surface', () => {
         expect(Object.keys(api).sort()).toEqual([
             'CronSyntaxError',
             'dueSince',
+            'equals',
             'isDue',
             'isInterval',
             'isReboot',
@@ -18,6 +19,7 @@ describe('public surface', () => {
             'parseCron',
             'prev',
             'safeParseCron',
+            'stringify',
         ]);
     });
 

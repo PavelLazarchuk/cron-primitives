@@ -1,6 +1,9 @@
 export { parseCron, safeParseCron } from './cron/parse';
 export type { ParseOptions, ParseResult } from './cron/parse';
 
+export { equals, stringify } from './cron/stringify';
+export type { StringifyOptions } from './cron/stringify';
+
 export { matches, next, nextN, occurrences, prev } from './core/api';
 export { isInterval, isReboot } from './core/search';
 

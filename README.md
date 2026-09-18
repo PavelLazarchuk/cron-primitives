@@ -13,7 +13,7 @@ This package ships the arithmetic and hands the answer back:
 
 - **Zero dependencies.** No polyfills, no `node:` imports in the core.
 - **Edge-native.** Runs unchanged in Workers, Deno, Bun, browsers and Node >= 18.
-- **5.8 kB gzipped** for everything; 2.8 kB if you only import `next`.
+- **6.4 kB gzipped** for everything; 2.8 kB if you only import `next`.
 - **Serializable schedules.** Parse once, store the object, restore it after a restart.
 
 ```ts
@@ -32,8 +32,8 @@ npm install cron-primitives
 
 | Import                     | What you get                                                                        | Size (gzip) |
 | -------------------------- | ----------------------------------------------------------------------------------- | ----------- |
-| `cron-primitives`          | `parseCron`, `next`, `prev`, `nextN`, `occurrences`, `matches`, `dueSince`, `isDue` | 5.8 kB      |
-| `cron-primitives/cron`     | the parser alone, for validating input                                              | 2.5 kB      |
+| `cron-primitives`          | `parseCron`, `next`, `prev`, `nextN`, `occurrences`, `matches`, `dueSince`, `isDue` | 6.4 kB      |
+| `cron-primitives/cron`     | the parser, `stringify` and `equals`, for validating and storing input              | 3.2 kB      |
 | `cron-primitives/tz`       | `offsetAt`, `wallFromEpoch`, `epochFromWall`                                        | 1.1 kB      |
 | `cron-primitives/describe` | a schedule in any language                                                          | 1.9 kB      |
 | `cron-primitives/schedule` | the only module that touches a timer                                                | 3.7 kB      |
@@ -127,6 +127,42 @@ A schedule is plain JSON, so it can come back from storage in any shape. The fir
 query on a restored schedule checks it: values are sorted and deduplicated, and a
 field that is empty or out of range throws a `TypeError` rather than answering with
 an instant that was never scheduled.
+
+### Writing it back — `stringify` and `equals`
+
+A schedule goes into storage as JSON, but half the places it has to end up want a string: a crontab line, a Cloudflare cron trigger, a Quartz job, a field in an admin form.
+
+```ts
+stringify(schedule: CronSchedule, options?: {
+    seconds?: boolean;  // write the seconds field; default: only when the schedule has one
+    macros?: boolean;   // default false — '0 0 * * *' rather than '@daily'
+}): string
+
+equals(a: CronSchedule | string, b: CronSchedule | string, options?: ParseOptions): boolean
+```
+
+`stringify` writes the shortest expression that parses back into the same schedule: a run of three or more becomes a range, even spacing that reaches the end of its field becomes a step, and names become the numbers they stood for.
+
+```ts
+stringify(parseCron('1,2,3 * * * *')); // → '1-3 * * * *'
+stringify(parseCron('0,15,30,45 * * * *')); // → '*/15 * * * *'
+stringify(parseCron('0 0 * JAN-MAR MON')); // → '0 0 * 1-3 1'
+stringify(parseCron('@daily'), { macros: true }); // → '@daily'
+```
+
+`L`, `W`, `#`, the year field and `@reboot` come back term for term — there is no shorter way to say them, and no other way either. A schedule that fires on a second other than zero always keeps its seconds field, whatever `seconds` says: five fields cannot express it. A day field that was written restricted stays restricted, so `'0 0 * * 0,6'` is not shortened to `'*/6'`: which days the field names is not the only thing it says.
+
+Parse back with the same `seconds` flag the schedule carries: `parseCron(stringify(s), { seconds: s.hasSeconds })`. It only matters for the Quartz year field, where five fields plus a year and six fields are the same six tokens — the same ambiguity `parseCron` already makes you resolve on the way in.
+
+`equals` answers the question that comes up next — is this the schedule already in the database? — by comparing canonical forms, so spelling does not count:
+
+```ts
+equals('0 0 * * *', '@daily'); // → true
+equals('0 0 * * *', '0 0 0 * * *'); // → true
+equals('1,2,3 * * * *', '1-3 * * * *'); // → true
+```
+
+Whether day-of-month and day-of-week are read together _does_ count, since it changes when the schedule fires: a `domDowMode: 'and'` schedule never equals the `'or'` reading of the same expression.
 
 ### Querying
 
